@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch","fullTextIndex"]
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+/// User schema
+model User {
+  email       String   @id
+  name        String?
+  password    String?
+  profileImg  String?
+  phoneNumber Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  admin       Admin?
+  checker     Checker?
+  peoples     Peoples?
+  manager     Manager?
+
+  notificationSent Notifications[]
+}
+
+/// Admin creates organizations, add users and assigns roles to users like people, manager, checker
+model Admin {
+  email          String       @id
+  user           User         @relation(fields: [email], references: [email])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+/// Manager can approve the token request
+model Manager {
+  email          String       @id
+  user           User         @relation(fields: [email], references: [email])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  token Token[]
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+/// Checker can check the token status and check entry and exit
+model Checker {
+  email          String       @id
+  user           User         @relation(fields: [email], references: [email])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  token Token[]
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+/// Organization schema
+model Organization {
+  id                    String    @id @default(uuid())
+  name                  String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  peoples               Peoples[]
+  admin                 Admin[]
+  checker               Checker[]
+  manager               Manager[]
+  unrestrictedStartTime DateTime  @default(dbgenerated("043000")) @db.Time()
+  unrestrictedEndTime   DateTime  @default(dbgenerated("123000")) @db.Time()
+  organizationLogo      String?
+
+  notifications Notifications[]
+
+  @@index([id, name])
+}
+
+/// Students schema
+model Peoples {
+  user           User         @relation(fields: [email], references: [email])
+  email          String       @id
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  token Token[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+/// Token Status
+enum TokenStatus {
+  REQUESTED
+  ISSUED
+  REJECTED
+  EXPIRED
+  IN_USE
+  LATE
+}
+
+/// Token schema
+model Token {
+  token     String   @id @default(uuid())
+  reason    String
+  heading   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issuedBy       Peoples     @relation(fields: [issuedById], references: [email])
+  issuedById     String
+  organizationId String
+  status         TokenStatus @default(REQUESTED)
+
+  startTime DateTime
+  endTime   DateTime
+
+  acceptedBy    Manager? @relation(fields: [acceptedByUid], references: [email])
+  acceptedByUid String?
+
+  rejectionReason String?
+
+  exitTime     DateTime?
+  returnedTime DateTime?
+
+  checkedBy    Checker? @relation(fields: [checkedByUid], references: [email])
+  checkedByUid String?
+
+  lateEntry lateEntry?
+
+  pass         String?
+  passValidity DateTime? @db.Time()
+
+  @@index([token])
+  @@index([issuedById, organizationId])
+  @@index([acceptedByUid, organizationId])
+  @@index([checkedByUid, organizationId])
+
+  @@fulltext([reason, heading])
+}
+
+/// Late Entry
+model lateEntry {
+  referedToken      Token    @relation(fields: [token], references: [token])
+  token             String   @id
+  expectedEntryTime DateTime
+
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([token])
+}
+
+enum NotificationStatus {
+  SUCCESS
+  FAILED
+  INITIATED
+}
+
+model Notifications {
+  notificaitonId String @id @default(uuid())
+  title          String
+  description    String
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  topic          String
+
+  notificationStatus NotificationStatus @default(INITIATED)
+
+  sender      User     @relation(fields: [senderEmail], references: [email])
+  senderEmail String
+  createdAt   DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([senderEmail])
+}
